@@ -32,7 +32,8 @@ To run the client:
 The repo also includes a `final` folder, to show what your code should look like once you've finished the course. You can use it to check your work if you get stuck.
 
 Publish the subgraph schemas to Apollo Studio
-1. Run `rover config auth` to set the `APOLLO_KEY` value 
+
+1. Run `rover config auth` to set the `APOLLO_KEY` value
 1. Navigate to `final/subgraph-locations`.
 1. Run `rover subgraph publish <APOLLO_GRAPH_REF> --name locations --schema locations.graphql --routing-url http://localhost:4001`
 1. Navigate to `final/subgraph-reviews`.
@@ -100,7 +101,13 @@ To run the servers in the `final` folder:
 1. Submit a review for a location.
    ```graphql
    mutation submitReview {
-     submitReview(review: { comment: "Wow, such a great planet!", rating: 5, locationId: "1" }) {
+     submitReview(
+       review: {
+         comment: "Wow, such a great planet!"
+         rating: 5
+         locationId: "1"
+       }
+     ) {
        code
        success
        message
