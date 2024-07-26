@@ -6,6 +6,7 @@
 - [Apollo Federation](#apollo-federation)
 - [Apollo Gateway](#apollo-gateway)
 - [Apollo Server](#apollo-server)
+- [Entities in Apollo Federation](#entities-in-apollo-federation)
 - [Operations](#operations)
 - [GraphQL](#graphql)
 - [Subgraph](#subgraph)
@@ -114,6 +115,12 @@ You can definitely build a GraphQL server from scratch—but fortunately, a lot 
 <span style="color: tomato;">Apollo Server</span> is an open-source server library that's great for beginners and experts alike. It's quick and easy to set up, but robust enough to handle enterprise traffic either as a standalone server or part of a <span style="color: tomato;">federated graph</span>.
 
 <span style="color: tomato;">Apollo Server</span> gives us a way to start listening for requests immediately. But to actually start querying our server for data, we need to hand it just a few missing pieces: some information about what can be queried, and the hookups for where to find that data. Next, let's talk about the document that details everything that can be queried—the schema.
+
+---
+
+### Entities in Apollo Federation
+
+Entities are a fundamental building block of Apollo Federation. In a supergraph, an entity is an object type that can resolve its fields across multiple subgraphs. Each subgraph can contribute different fields to the entity and is responsible for resolving only the fields that it contributes. This enables subgraphs to adhere to the separation of concerns principle.
 
 ---
 
