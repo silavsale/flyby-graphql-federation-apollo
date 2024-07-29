@@ -491,3 +491,481 @@ The typename field is like a passport's country of origin. It says which entity 
 
 * Any subgraph that contributes fields to an entity needs to define a reference resolver function for that entity. This `__resolveReference` resolver is called whenever the router needs to access fields of the entity from within another subgraph.
 * An entity representation is an object that the router uses to represent a specific instance of an entity. It includes the entity's type and its key field(s).
+
+# 10. DEFINING AN ENTITY
+
+### Overview
+
+Let's jump into the code!
+
+In this lesson, we will:
+
+- Convert the Location type into an entity that can be shared between our subgraphs
+- Publish updates to existing subgraphs
+
+# ✏️ Defining the `Location` entity's `@key`
+
+1.Open up the `subgraph-locations/locations.graphql` file and find the `Location` type.
+
+![Defining-an-entity](./assets/entity_subgraph_locations.png)
+
+2. We'll add the `@key` directive to this type definition, specifying the `fields` property and setting its value to `id`.
+
+![Defining-an-entity](./assets/entity_002.png)
+
+## Check changes in Sandbox
+
+Let's test our changes. Open up http://localhost:4001 in your browser and use Sandbox to query our server again.
+
+In the Documentation tab, we should now see that there's a new field on the Query type called `_entities`. This is a special field that the router uses for coordinating data between subgraphs. We'll learn how exactly the router uses this field in the next lesson.
+
+![Defining-an-entity](./assets/F_01_08_SC_47_v2.png)
+
+Other than that, not much has changed! We should still be able to use Explorer to query the `locations` subgraph as before. (Try running a quick query for some data on the `locations` field, to make sure everything still works as expected.)
+
+### Publish the `locations` subgraph
+
+We'll need to publish this subgraph so that the schema registry can pick up our changes.
+
+Let's make sure we're in the top-level directory of our project when we run the `rover subgraph publish` command in the terminal.
+
+![Defining-an-entity](./assets/rover_publish_subgraph.png)
+
+We can omit the `--routing-url` option in the command because we already set that value the first time we published the subgraph to the registry.
+
+Great, it looks like our changes have been published successfully!
+
+# ✏️ Defining our entity in `reviews`
+
+We want to use the `Location` entity in our `reviews` subgraph as well.
+
+1. Open up the `subgraph-reviews/reviews.graphql` file.
+2. We'll add the Location type definition, along with the @key directive and set the id field as the primary key.
+
+![Defining-an-entity](./assets/defining_entity_in_review.png)
+
+3. Inside the curly braces, we'll add the id field of type non-nullable ID!.
+
+![Defining-an-entity](./assets/Difining_review_002.png)
+
+The `Location` entity doesn't need to include all the fields we defined for it in the `locations` subgraph. After all, the `reviews` subgraph doesn't know anything about these fields, or how to resolve them!
+
+So far, we've given our `reviews` subgraph a stub of the `Location` entity. A stub serves as a basic representation of a type that includes just enough information to work with that type in the subgraph.
+
+There's one more change we need to make. Because the `reviews` subgraph is not responsible for resolving any of the entity's other fields, we'll add one more property to our `@key` directive.
+
+4. Inside the `@key` directive, add a property called `resolvable` and set it to `false`.
+
+![Defining-an-entity](./assets/Define_review_003.png)
+
+This property tells the router that this subgraph doesn't define a reference resolver for this entity.
+
+Recall that a reference resolver is responsible for returning all of the entity fields that this subgraph contributes. The `reviews` subgraph doesn't contribute any other fields (besides the key field), so it doesn't need to define a reference resolver. The `resolvable: false` property indicates this to the router!
+
+### Publish the `reviews` subgraph
+
+Now let's publish our `reviews` subgraph updates. From a terminal in the root directory of our project, let's run the `rover subgraph publish` command again.
+
+![Defining-an-entity](./assets/Publish_reviews_subgraph.png)
+
+Alright, we see a success message and our changes have made it to the registry!
+
+### Key takeaways
+
+- To create an entity, we can use the @key directive to specify which field(s) can uniquely identify an object of that type.
+- When a subgraph can't be used to resolve any non-@key fields of an entity, we pass resolvable: false to the @key directive definition.
+
+# 11. ENTITIES AND THE QUERY PLAN
+
+### Overview
+
+We've set up our entity definitions, but how exactly does the router use these entities?
+
+In this lesson, we will:
+
+- Learn how the router uses entities and the query plan to connect data from multiple subgraphs
+- Learn how entity representations and reference resolvers work together
+
+### Let's look at an example query
+
+Let's say the client makes a request for our app's latest reviews. In their query, they'll request the id, comment, and rating for each review, along with the name of each review's location.
+
+![Entities-and-the-query-plan](./assets/GetLatestReviews.png)
+![Entities-and-the-query-plan](./assets/F_01_11_IL_54_client-request_v608za.png)
+Now it's the router's time to shine!
+
+### Step 1: Building the query plan
+
+Like we saw earlier, the router begins by building a query plan that indicates which requests to send to which subgraphs.
+
+The router starts with the incoming query's top-level field, `latestReviews`. With the help of the supergraph schema, the router sees that `latestReviews` is defined in the `reviews` subgraph.
+
+So the router starts the query plan with a request to the `reviews` subgraph.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_55_reviews-sg_r9hvdb.png)
+
+The router continues like this for a while, checking each field in the query against the supergraph schema, and adding it to the query plan. The fields for `id`, `comment`, `rating` and `location` all belong to the `reviews` subgraph.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_56_reviews-sg-b_d3f5lu.png)
+
+But when the router reaches the `name` field for a particular `Location`, it sees from the supergraph schema that `Location.name` can only be resolved by the `locations` subgraph (because that's where the `Location.name` field is defined).
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_56-location-schema_sa7cgh.png)
+
+That means the router is going to have to connect data between subgraphs.
+
+To do this, the router needs some more information from the `reviews` subgraph: the entity representation for each review's corresponding `Location` object.
+
+Remember that entity representations are what the router uses to track a specific object between subgraphs. To make an entity representation for a `Location` object, the router needs the location's typename and its primary key (which in this case is the `id` field).
+
+![Entities-and-the-query-plan](./assets/F_01_09_105_kz9akz.png)
+
+The router can get both these fields from the `reviews` subgraph.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_entity_rep_wrwdny.png)
+
+From there, the router adds another operation to its query plan to request the location's `name` from the `locations` subgraph.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_location_name_ho8vy2.png)
+
+With that, all the fields in the query have been accounted for in the query plan. It's time to move on to the next step: executing the plan.
+
+# Step 2: Querying the `reviews` subgraph
+
+The router begins by requesting data from the `reviews` subgraph.
+
+The `reviews` subgraph resolves all the requested fields as it normally would, including the entity representations for all the requested location objects.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_58_y33id4.png)
+
+This subgraph doesn't know that the router plans to do anything special with the location's id or typename. It just sends back the data to the router like it was asked.
+
+![Entities-and-the-query-plan](./assets/F_01_10_IL_59_kqsflm.png)
+
+With that, the router's taken care of the first part of the query plan! The next step is to retrieve the `name` field from the `locations` subgraph.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_name_next_zwf6k6.png)
+
+# Step 3: Querying the `locations` subgraph
+
+Remember the `_entities` field that showed up in our subgraph after we first defined an entity? This is where it comes back into the story!
+
+The router builds a request using the `_entities` field.
+
+This field takes in an argument called `representations`, which takes in, well, a list of entity representations! This is where the entity representations that the router received from the `reviews` subgraph will go.
+
+In the same request, the router adds the rest of the fields left in the query plan (in this case, the location's `name`).
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_60_kps963.png)
+
+The router sends this request to the location's subgraph.
+
+To resolve the `_entities` field, the `locations` subgraph uses its reference resolver. Remember this is a special resolver function used to return all the entity fields that this subgraph contributes.
+
+The `locations` subgraph looks at the `__typename` value of each reference object to determine which entity's reference resolver to use. In this case, because typename is "Location", the `locations` subgraph knows to use the `Location` entity's reference resolver.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_61_zwdl2p.png)
+
+The `Location` reference resolver runs once for each entity representation in the query. Each time, it uses the entity representation's primary key to return the corresponding `Location` object.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_63_vymzl2.png)
+
+After the `locations` subgraph finishes resolving the request, it sends the data back to the router.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_64_z5u2if.png)
+
+That's it for the executing phase!
+
+# Step 4: Sending the final response to the client
+
+Now, the router combines all the data it received from the `reviews` and `locations` subgraphs into a single JSON object. And at last, the router sends the final object back to the client.
+
+![Entities-and-the-query-plan](./assets/F_01_11_IL_66_h3sdix.png)
+
+### Key takeaways
+
+- When the router needs to query for fields from a different subgraph, it also asks for entity representations from the current subgraph it's querying. These representations will be used in the subsequent operation's \_entities field, set as the value for the representations argument.
+- The reference resolver takes each representation and returns the matching data for its requested fields.
+
+# 12. REFERENCING AN ENTITY
+
+### Overview
+
+Let's get back to our problem of how to connect data between subgraphs. We'll take care of one of the missing pieces of our schema: the `Review.location` field.
+
+In this lesson, we will:
+
+Learn how to reference an entity in a subgraph as a return type by implementing the `Review.location` field
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/review-location-under-construction-v2-recolor.svg)
+
+# The `Location` entity as a return type
+
+We want to use the `Location` entity as the return type for the `Review.location` field, so let's take a closer look at how to do that.
+
+### ✏️ Adding the `Review.location` field to the schema
+
+1. Open up the `subgraph-reviews/reviews.graphql` file.
+
+2. Let's add a new field called `location`, which should return a `Location` type.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_code_01.png)
+
+3. We can test our changes and open Sandbox for the `reviews` subgraph at http://localhost:4002. We should see the new `location` field show up under `latestReviews`.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/F_01_10_SC_53.png)
+
+4. Let's try running a query to test out our new field. We'll query for `latestReviews`, and include the `id`, `comment` and `rating` fields. Next, we'll include the new `location` field and its `id`. Let's also give the operation a descriptive name: `GetLatestReviewsAndLocations`.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_02_code.png)
+
+When we submit the query, we can see that we get back `null` for the value of each `location`!
+
+```json {
+  "data": {
+    "latestReviews": [
+      {
+        "id": "rev-8",
+        "comment": "This is simply unbelievable! It's the perfect solution for our business. Really good. I don't always clop, but when I do, it's because of planet",
+        "rating": 5,
+        "location": null
+      },
+      {
+        "id": "rev-9",
+        "comment": "Planet is exactly what our business has been lacking. It's incredible. If you want real marketing that works and effective implementation - planet's got you covered.",
+        "rating": 5,
+        "location": null
+      },
+      {
+        "id": "rev-10",
+        "comment": "Thanks planet! I was amazed at the quality of planet. Planet did exactly what you said it does.",
+        "rating": 5,
+        "location": null
+      }
+    ]
+  }
+}
+```
+
+This is because we haven't defined what the `reviews` subgraph should return when this field is queried! We first need to define a corresponding resolver function.
+
+### ✏️ The `Review.location` resolver function
+
+As we saw before, the router will ask the `reviews` subgraph for an entity representation of the location the review is associated with. The router already knows how to retrieve the typename, but it needs the location's id key field. Let's set that up.
+
+1. Open up the `subgraph-reviews/resolvers.js` file.
+
+2. In the `resolvers` object, we'll add a new key for the `Review` type, and an empty resolver function for the `location` field.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_03_code.png)
+
+3. Name the first parameter of the resolver function `review`, which is the `parent` object of the field.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_04_code.png)
+
+4. For the body of the resolver, we need to return an entity representation with the location's id. So how do we retrieve the id of a location for a particular review?
+
+To answer this question, we'll take a quick detour to look at what reviews data we get back from our data source. Jump over to the `reviews_data.json` file in the `datasources` directory. Here we can see that for each review object, we are storing the `locationId` each review belongs to.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_05_code.png)
+
+This `locationId` field specifies exactly the data we're looking for - a location's `id`!
+
+Back in the `Reviews.location` resolver, let's destructure the `review` object and pull out `locationId`. Then we'll return a new object that reassigns `locationId` to `id`. This will match it to the name of the `Location` entity's `@key` field.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_06_code.png)
+
+### Checking your work
+
+Fantastic! Now let's check that everything's playing nicely. Go back to Apollo Sandbox for the `reviews` subgraph at http://localhost:4002.
+
+Let's try out that query again. This time, we get back each location's id!
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_07_code.png)
+
+The response should match the shape of the object below:
+
+```json
+{
+  "data": {
+    "latestReviews": [
+      {
+        "id": "rev-8",
+        "comment": "This is simply unbelievable! It's the perfect solution for our business. Really good. I don't always clop, but when I do, it's because of planet",
+        "rating": 5,
+        "location": {
+          "id": "loc-2"
+        }
+      },
+      {
+        "id": "rev-9",
+        "comment": "Planet is exactly what our business has been lacking. It's incredible. If you want real marketing that works and effective implementation - planet's got you covered.",
+        "rating": 5,
+        "location": {
+          "id": "loc-3"
+        }
+      },
+      {
+        "id": "rev-10",
+        "comment": "Thanks planet! I was amazed at the quality of planet. Planet did exactly what you said it does.",
+        "rating": 5,
+        "location": {
+          "id": "loc-4"
+        }
+      }
+    ]
+  }
+}
+```
+
+And now our `reviews` subgraph can resolve a location's `id` field, which is exactly what the router will need to associate data across subgraphs.
+
+To resolve the rest of the `Location` fields (like `name`, `description`, or `photo`), we still have one thing left to add to our schema: the `Location` entity's reference resolver!
+
+### ✏️ Implement the `__resolveReference` resolver
+
+1. Moving over to the `subgraph-locations` directory, open up the `resolvers.js` file.
+
+2. Inside the `resolvers` object, add a new key for `Location`, then a resolver function called `__resolveReference`.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_08_code.png)
+
+3. Next, let's set up this function's arguments.
+
+Destructure the first argument, which is the entity representation object, and pull out the `id` field from it.
+
+Similarly, destructure the second argument (`context`) to access the `dataSources` property.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_09_code.png)
+
+4. The body of the reference resolver function needs to return all the entity fields that this subgraph defines. To do this, we'll use the `LocationsAPI` data source and its `getLocation` method. It returns a `Location` object for a given ID.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_010_code.png)
+
+> Note: You can check out how the `getLocation` method works by peeking inside the `subgraph-locations/datasources/LocationsApi.js` file.
+
+See it in action!
+
+Now that our `__resolveReference` resolver is set up, we can test it out by pretending to be the router and mimicking the request it sends to the `locations` subgraph!
+
+> Note: You aren't required to do this step, as it's a bit advanced. But if you're interested in seeing how things work under the hood, then proceed!
+
+With our `locations` server running, open http://localhost:4001 in Apollo Sandbox.
+
+Add the following query variable in the Variables pane, to imitate the reference objects the router would pass in from the `reviews` subgraph:
+
+```json
+{
+  "representations": [
+    {
+      "__typename": "Location",
+      "id": "loc-1"
+    },
+    {
+      "__typename": "Location",
+      "id": "loc-2"
+    }
+  ]
+}
+```
+
+Then run the following query:
+
+```graphql
+query GetLocationNames($representations: [_Any!]!) {
+  _entities(representations: $representations) {
+    ... on Location {
+      name
+    }
+  }
+}
+```
+
+The response should look something like the object below.
+
+```json
+{
+  "data": {
+    "_entities": [
+      {
+        "name": "The Living Ocean of New Lemuria"
+      },
+      {
+        "name": "Vinci"
+      }
+    ]
+  }
+}
+```
+
+> Note: As you can see, the `Query._entities` field is quite powerful and can be used for malicious reasons (anyone can mimic a request and retrieve information they aren't supposed to). For this reason, your subgraphs should not be directly accessible by clients. See the docs for more information. https://www.apollographql.com/docs/apollo-server/using-federation/apollo-subgraph-setup/#securing-your-subgraphs
+
+And with that, our graph is now fully set up to handle referencing entities!
+
+Okay, we should be ready to query our supergraph in Studio, and watch the magic of the router associating data between our subgraphs!
+
+Let's get to building the `GetLatestReviews` query we agreed upon earlier with the frontend team. We'll add our fields... wait a minute, where did our `location` field go? Wasn't this working great locally on Sandbox? What happened?
+
+We forgot to publish our `reviews` subgraph schema changes to the registry!
+
+### ✏️ Publish subgraph change with Rover
+
+Oops! Let's hop over to a terminal in the root of the project, and run `rover subgraph publish`, passing in the variables for the `reviews` subgraph.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_011_code.png)
+
+Now we should be ready to query our supergraph in Studio, and watch the magic of the router associating data between our subgraphs! ✨
+
+### ✏️ Check your work against the router
+
+Let's run this query in Studio.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/12_012_code.png)
+
+Note: If you see red squiggly lines below the `location` field on `latestReviews`, try refreshing the page. You may have been faster than the supergraph composition!
+
+And we can see all our data is coming back from both the `locations` and `reviews` subgraphs!
+
+We should see a response like this:
+
+```json
+{
+  "data": {
+    "latestReviews": [
+      {
+        "id": "rev-8",
+        "comment": "This is simply unbelievable! It's the perfect solution for our business. Really good. I don't always clop, but when I do, it's because of planet",
+        "rating": 5,
+        "location": {
+          "name": "Vinci"
+        }
+      },
+      {
+        "id": "rev-9",
+        "comment": "Planet is exactly what our business has been lacking. It's incredible. If you want real marketing that works and effective implementation - planet's got you covered.",
+        "rating": 5,
+        "location": {
+          "name": "Asteroid B-612"
+        }
+      },
+      {
+        "id": "rev-10",
+        "comment": "Thanks planet! I was amazed at the quality of planet. Planet did exactly what you said it does.",
+        "rating": 5,
+        "location": {
+          "name": "Krypton"
+        }
+      }
+    ]
+  }
+}
+```
+
+Let's update our schema agreement checklist and check off the location field we just added to the Review type.
+
+![Referencing-an-entity](./assets/12-referencing-an-entity/F_01_10_DG_122-recolor.svg)
+
+### Key takeaways
+
+- We can reference an entity in one subgraph as the return value for a type's field.
+- Any subgraph that contributes fields to an entity needs to define a `__resolveReference` resolver function for that entity. This resolver is called when the router needs to resolve references to that entity made from within other subgraphs.
