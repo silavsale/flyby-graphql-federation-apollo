@@ -1,5 +1,160 @@
 # Odyssey Voyage I
 
+Voyage I: Federation from Day One
+Learn how to modularize your GraphQL backend using Apollo Federation.
+
+<img src="./assets/hubble_thumb_beige_aafumy.svg" alt="Image Description" align="right" width="500">
+
+### What you'll learn
+
+- The architecture of a supergraph (subgraphs and the router) and Apollo Federation 2
+
+- Create and publish subgraph schemas
+
+- Use the Rover CLI to interact with your supergraph
+
+- Configure a locally-running GraphOS Router
+
+- Create entities
+
+- Use entities between subgraphs
+
+---
+
+### Table of Contents
+
+- [Chapter 1: Intro to Federation](#chapter-1-intro-to-federation)
+- [Chapter 2: Project Setup](#chapter-2-project-setup)
+- [Chapter 3: Agreeing on a Schema](#chapter-3-agreeing-on-a-schema)
+- [Chapter 4: Building Out the Subgraphs](#chapter-4-building-out-the-subgraphs)
+- [Chapter 5: Managed Federation & the Supergraph](#chapter-5-managed-federation--the-supergraph)
+- [Chapter 6: Publishing the Subgraphs with Rover](#chapter-6-publishing-the-subgraphs-with-rover)
+- [Chapter 7: How the Router Resolves Data](#chapter-7-how-the-router-resolves-data)
+- [Chapter 8: Router Configuration and Uplink](#chapter-8-router-configuration-and-uplink)
+- [Chapter 9: Connecting Data Using Entities](#chapter-9-connecting-data-using-entities)
+- [Chapter 10: Defining an Entity](#chapter-10-defining-an-entity)
+- [Chapter 11: Entities and the Query Plan](#chapter-11-entities-and-the-query-plan)
+- [Chapter 12: Referencing an Entity](#chapter-12-referencing-an-entity)
+- [Chapter 13: Contributing to an Entity](#chapter-13-contributing-to-an-entity)
+- [Chapter 14: Putting It All Together](#chapter-14-putting-it-all-together)
+
+---
+
+# Chapter 1: Intro to Federation
+
+### Overview
+
+Welcome to Voyage, a 3-part Odyssey series all about building a supergraph with Apollo Federation!
+
+**Apollo Federation** is an architecture for creating modular graphs. That means that your graph is built in smaller pieces that all work together. When your graph is built using this architecture, it's called a supergraph. The supergraph improves the developer experience for teams, making it easier to scale your product.
+
+To help build, manage and scale our supergraph safely, we'll use the Apollo GraphOS platform. We'll work with tools such as GraphOS Studio and the Rover CLI to bring our supergraph to life!
+
+In this first course, we'll dip our toes into the world of federation. We'll explore what Apollo Federation is, why it's useful, and the key pieces of a supergraph architecture. Along the way, we'll put these concepts into practice by building a supergraph for a travel-review app called **FlyBy**.
+
+Ready? Let's get started! In this lesson, we will:
+
+- Specify how a supergraph differs from a non-federated graph
+- Identify the key pieces of a supergraph architecture
+- Explain the benefits of using a modular supergraph
+
+> **Note**: This series is intended for backend developers.
+
+> If you only work on the frontend, the good news is that your workflow stays the same, regardless of whether or not the backend uses Federation. You'll still send all your GraphQL operations to a single endpoint, and the supergraph will handle the rest!
+
+### Life before Apollo Federation
+
+Before we jump into the details of how to build a supergraph, let's take a step back and look at what life was like without Apollo Federation.
+
+In a non-federated architecture, all the types and fields for your entire graph are represented by a single schema file on a GraphQL server.
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_DG_01_ubjaox.svg)
+
+When a client needs some data, it sends a GraphQL operation to the server. Then the server uses its schema, resolvers, and data sources to resolve the requested fields, package all the data together, and send it back to the client.
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_IL_02_onwsqc.png)
+
+This works fine for smaller projects or teams, but what happens as your schema grows? As more types and fields get added to that one schema file, it becomes harder to manage. Backend teams may face more frequent merge conflicts and slower development time.
+
+But don't worry! That's what Apollo Federation and the supergraph are here to fix.
+
+> **Note**: You might hear the terms "supergraph" and "federated graph" used interchangeably. They mean the same thing: your graph's functionality is divided across smaller, modular graphs.
+
+### The structure of a supergraph
+
+Let's take a closer look at the structure of a supergraph. A supergraph has two key pieces:
+
+- One or more subgraphs
+- A router
+
+### Subgraphs
+
+In a supergraph, your schema is built in smaller parts. The division of these parts is usually based on domain or on which team manages that part of the schema.
+
+The example below shows that we could split the schema into two pieces: one piece for fields related to products data (`name`, `numberInStock`, `price`) and another piece for fields related to events data (`date`, `attendees`, `venue`).
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_DG_03_fqzr68.svg)
+
+Each part of the schema is owned by a separate subgraph. A subgraph is a standalone GraphQL server with its own schema file, resolvers, and data sources.
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_IL_114_subgraphs_orczs9.png)
+
+> **Note**: If you've worked with a microservice architecture before, this might look familiar. You can think of subgraphs as a way to orient the design of your graph's schema around your microservice architecture.
+
+### The router
+
+A supergraph architecture also includes the router, which sits between clients and the subgraphs. The router is responsible for accepting incoming operations from clients and splitting them into smaller operations that can each be resolved by a single subgraph.
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_IL_04_simple_architecture_exy5jk.png)
+
+The router does this work with the help of the supergraph schema. The supergraph schema is composed of all the fields and types from each subgraph schema. (Later in the course, we'll dive deeper into composition and how the router resolves client requests.)
+
+The supergraph schema is a bit like a map, helping the router determine which subgraph can resolve each field in an operation.
+
+### Why use Apollo Federation?
+
+With a supergraph architecture, nothing changes from the client perspective. They still communicate with a single GraphQL endpoint (the router), and they don't need to know a thing about how the graph is built under the hood.
+
+The real benefits are on the backend. These benefits come from one of the core principles of Apollo Federation: the **separation of concerns**.
+
+By splitting up our schema into subgraphs, backend teams can work on their own subgraphs independently, without impacting developers working on other subgraphs. And since each subgraph is a separate server, teams have the flexibility to choose the language, infrastructure, and policies that work best for them.
+
+![Chapter 1: Intro to Federation](./assets/01-intro-to-federation/F_01_01_IL_115_teams_lfgnvl.png)
+
+# Chapter 2: Project Setup
+
+### Overview
+
+Let's get our project set up! In this course, we'll play the role of a backend developer using Apollo Federation to build a supergraph for an app called FlyBy.
+
+But first, let's imagine we've been transported far into the future, where everyone can traverse the galaxy for fun and adventure... and this is where FlyBy comes in.
+
+In this lesson, we will:
+
+- Explore the features of FlyBy, the demo app for this course
+- Set up the FlyBy starter code
+
+### What You'll Build: FlyBy
+
+FlyBy is a web app that lets users review places they've visited on their intergalactic travels. They can browse a list of all the locations fellow space travelers have visited, see the details and reviews for each location, and submit reviews of their own.
+
+Want a preview? You can explore the final version of the FlyBy app. https://odyssey-flyby.netlify.app/?_gl=1*hac8pm*_ga*ODA0NDg2MDMuMTcxOTkzMTU2Mg..*_ga_0BGG5V2W2K*MTcyMjQ1MzYyNi4zNi4xLjE3MjI0NTQ1MTcuMC4wLjA.
+
+![Chapter 2: Project Setup](./assets/02_Project-Setup/videoframe_12990.png)
+
+Like most apps, Flyby starts small. But by using a supergraph architecture right from the start, we can scale the FlyBy graph as the app and organization inevitably grow.
+
+To build out the FlyBy supergraph, we will:
+
+Publish two subgraphs: locations and reviews (Lessons 4-6)
+Set up the GraphOS Router (Lessons 7-8)
+Update the subgraphs to share types between them (Lessons 9-14)
+See how everything fits together with the frontend (Lesson 14)
+Let's get started!
+
+Prerequisites
+FlyBy uses Node.js on the backend and React on the frontend. We recommend using the latest LTS version of Node. To check your Node version, run node -v.
+
 In this project we have two services: locations and reviews,
 
 To create supergraph and combine this services to one we need to convert service to a subraph
@@ -203,7 +358,7 @@ In this lesson, we will:
 - Connect the router to GraphOS
 - Send our first query to our supergraph
 
-# 8. ROUTER CONFIGURATION AND UPLINK
+# Chapter 8: Router Configuration and Uplink
 
 ### Overview
 
@@ -368,7 +523,7 @@ query GetLocationsAndLatestReviews {
 
 > This is huge. We've just unlocked one of the powers of our supergraph: we can write one query to our router and hit both subgraphs at once!
 
-# 9. CONNECTING DATA USING ENTITIES
+# Chapter 9: Connecting Data Using Entities
 
 ### Overview
 
@@ -492,7 +647,7 @@ The typename field is like a passport's country of origin. It says which entity 
 * Any subgraph that contributes fields to an entity needs to define a reference resolver function for that entity. This `__resolveReference` resolver is called whenever the router needs to access fields of the entity from within another subgraph.
 * An entity representation is an object that the router uses to represent a specific instance of an entity. It includes the entity's type and its key field(s).
 
-# 10. DEFINING AN ENTITY
+# Chapter 10: Defining an Entity
 
 ### Overview
 
@@ -575,7 +730,7 @@ Alright, we see a success message and our changes have made it to the registry!
 - To create an entity, we can use the @key directive to specify which field(s) can uniquely identify an object of that type.
 - When a subgraph can't be used to resolve any non-@key fields of an entity, we pass resolvable: false to the @key directive definition.
 
-# 11. ENTITIES AND THE QUERY PLAN
+# Chapter 11: Entities and the Query Plan
 
 ### Overview
 
@@ -687,7 +842,7 @@ Now, the router combines all the data it received from the `reviews` and `locati
 - When the router needs to query for fields from a different subgraph, it also asks for entity representations from the current subgraph it's querying. These representations will be used in the subsequent operation's \_entities field, set as the value for the representations argument.
 - The reference resolver takes each representation and returns the matching data for its requested fields.
 
-# 12. REFERENCING AN ENTITY
+# Chapter 12: Referencing an Entity
 
 ### Overview
 
@@ -970,7 +1125,7 @@ Let's update our schema agreement checklist and check off the location field we 
 - We can reference an entity in one subgraph as the return value for a type's field.
 - Any subgraph that contributes fields to an entity needs to define a `__resolveReference` resolver function for that entity. This resolver is called when the router needs to resolve references to that entity made from within other subgraphs.
 
-# 13-contributing-to-an-entity
+# Chapter 13: Contributing to an Entity
 
 ### Overview
 
@@ -1293,7 +1448,7 @@ With that, we can finally check off the last two fields of our schema agreement!
 - A federated architecture helps organize and illustrate the relationships between types across our graph in a way that an app developer (or multiple teams of developers!) would want to consume the data.
 - When both subgraphs use the same primary key to associate data for a type, the router coordinates data from both sources and bundles it up in a single response.
 
-# 14. PUTTING IT ALL TOGETHER
+# Chapter 14: Putting It All Together
 
 ### Overview
 
